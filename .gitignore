@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Node
+node_modules/
+dist/
+.vite/
+*.local
+
+# Environment - never commit real configuration
+.env
+.env.*
+!.env.example
+
+# Data captured from upstream (regenerate with `make fixtures`)
+data/
+!data/.gitkeep
+
+# Benchmark output is committed deliberately, raw runs are not
+load/results/raw/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
