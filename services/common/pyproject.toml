@@ -11,6 +11,8 @@ dependencies = [
     "aiokafka>=0.10",
     "asyncpg>=0.29",
     "orjson>=3.10",
+    # aiokafka routes LZ4/Snappy/Zstd through cramjam, not the `lz4` package.
+    "cramjam>=2.8",
 ]
 
 [build-system]

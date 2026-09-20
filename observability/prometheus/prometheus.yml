@@ -1,0 +1,48 @@
+# Scrape config. Targets are compose service names on the racestream network.
+global:
+  scrape_interval: 5s          # matches the dashboard's finest resolution
+  scrape_timeout: 4s
+  evaluation_interval: 15s
+  external_labels:
+    stack: racestream
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Redpanda exports Kafka-level metrics (partition high-watermarks, group
+  # offsets) that complement the application-level lag gauge.
+  - job_name: redpanda
+    metrics_path: /public_metrics
+    static_configs:
+      - targets: ["redpanda:9644"]
+        labels:
+          component: streaming
+
+  - job_name: racestream-api
+    static_configs:
+      - targets: ["api:9100"]
+        labels:
+          component: api
+
+  - job_name: racestream-ingestion
+    static_configs:
+      - targets: ["ingestion:9101"]
+        labels:
+          component: ingestion
+
+  - job_name: racestream-processor
+    static_configs:
+      - targets: ["processor:9102"]
+        labels:
+          component: processor
+
+  - job_name: racestream-replay
+    static_configs:
+      - targets: ["replay:9103"]
+        labels:
+          component: replay

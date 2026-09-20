@@ -1,0 +1,182 @@
+# ===========================================================================
+# RaceStream local stack.
+#
+#   docker compose up --build
+#
+# Dependency order is expressed with `condition: service_healthy` rather than
+# plain `depends_on`, because a container being *started* says nothing about
+# whether it can accept a connection. Every service that others wait on has a
+# healthcheck that actually exercises it.
+# ===========================================================================
+
+name: racestream
+
+x-python-env: &python-env
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-redpanda:9092}
+  KAFKA_ACKS: ${KAFKA_ACKS:-all}
+  KAFKA_LINGER_MS: ${KAFKA_LINGER_MS:-10}
+  KAFKA_COMPRESSION_TYPE: ${KAFKA_COMPRESSION_TYPE:-lz4}
+  KAFKA_MAX_POLL_RECORDS: ${KAFKA_MAX_POLL_RECORDS:-500}
+  KAFKA_AUTO_OFFSET_RESET: ${KAFKA_AUTO_OFFSET_RESET:-earliest}
+  DB_DSN: ${DB_DSN:-postgresql://racestream:racestream@timescaledb:5432/racestream}
+  DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-2}
+  DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
+  DB_WRITE_BATCH_SIZE: ${DB_WRITE_BATCH_SIZE:-500}
+  DB_WRITE_BATCH_TIMEOUT_S: ${DB_WRITE_BATCH_TIMEOUT_S:-0.5}
+  OBS_LOG_LEVEL: ${OBS_LOG_LEVEL:-INFO}
+  OBS_LOG_JSON: ${OBS_LOG_JSON:-true}
+  OBS_ENVIRONMENT: ${OBS_ENVIRONMENT:-local}
+  OPENF1_BASE_URL: ${OPENF1_BASE_URL:-https://api.openf1.org/v1}
+  OPENF1_TIMEOUT_S: ${OPENF1_TIMEOUT_S:-30}
+  OPENF1_MAX_RETRIES: ${OPENF1_MAX_RETRIES:-4}
+  OPENF1_MAX_CONCURRENT_REQUESTS: ${OPENF1_MAX_CONCURRENT_REQUESTS:-4}
+  PYTHONUNBUFFERED: "1"
+
+services:
+  # ------------------------------------------------------------------ storage
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: racestream-timescaledb
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-racestream}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-racestream}
+      POSTGRES_DB: ${POSTGRES_DB:-racestream}
+      # Telemetry ingest is write-heavy and bursty; a larger WAL reduces
+      # checkpoint frequency during a replay at high speed multipliers.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=timescaledb
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - synchronous_commit=off   # local dev: durability traded for write throughput
+    ports:
+      # Host port only; services inside the network always use 5432. Defaults
+      # off 5432 because a developer machine very often already has Postgres
+      # bound there. Override with POSTGRES_PORT.
+      - "${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+      # Files here run once, in filename order, on first initialisation only.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-racestream} -d ${POSTGRES_DB:-racestream}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- streaming
+  redpanda:
+    image: redpandadata/redpanda:v24.2.18
+    container_name: racestream-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      # Two listeners: `internal` for containers on the compose network,
+      # `external` for tools run on the host (rpk, k6, local pytest).
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:18082
+      - --rpc-addr=0.0.0.0:33145
+      - --advertise-rpc-addr=redpanda:33145
+    ports:
+      - "19092:19092"   # Kafka API from the host
+      - "18082:18082"   # HTTP proxy
+      - "9644:9644"     # Admin API / Prometheus metrics
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  redpanda-console:
+    image: redpandadata/console:v2.7.2
+    container_name: racestream-redpanda-console
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      CONFIG_FILEPATH: /tmp/console-config.yaml
+      # Written at start so the console can be configured without a bind mount.
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda:9644"]
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/console-config.yaml; /app/console'
+    ports:
+      - "${CONSOLE_PORT:-8080}:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ----------------------------------------------------------- observability
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: racestream-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: racestream-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/pipeline-overview.json
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  timescale-data:
+  redpanda-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  default:
+    name: racestream

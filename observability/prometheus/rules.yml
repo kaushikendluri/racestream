@@ -1,0 +1,45 @@
+# Recording rules.
+#
+# The system screen and Grafana both need percentiles over the same histograms.
+# Computing them once here keeps the two consistent and keeps the dashboard
+# queries readable.
+groups:
+  - name: racestream_latency
+    interval: 15s
+    rules:
+      - record: racestream:end_to_end_latency_seconds:p50
+        expr: histogram_quantile(0.50, sum(rate(racestream_end_to_end_latency_seconds_bucket[1m])) by (le))
+      - record: racestream:end_to_end_latency_seconds:p95
+        expr: histogram_quantile(0.95, sum(rate(racestream_end_to_end_latency_seconds_bucket[1m])) by (le))
+      - record: racestream:end_to_end_latency_seconds:p99
+        expr: histogram_quantile(0.99, sum(rate(racestream_end_to_end_latency_seconds_bucket[1m])) by (le))
+
+  - name: racestream_throughput
+    interval: 15s
+    rules:
+      - record: racestream:messages_produced:rate1m
+        expr: sum(rate(racestream_messages_produced_total[1m]))
+      - record: racestream:messages_processed:rate1m
+        expr: sum(rate(racestream_messages_processed_total[1m]))
+      - record: racestream:consumer_lag:total
+        expr: sum(racestream_consumer_lag) by (group)
+
+  - name: racestream_alerts
+    rules:
+      - alert: ConsumerLagGrowing
+        expr: sum(racestream_consumer_lag) by (group) > 5000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer group {{ $labels.group }} is falling behind"
+          description: "Lag has exceeded 5000 records for 2 minutes. The processor is slower than the producer."
+
+      - alert: MessagesBeingDropped
+        expr: sum(rate(racestream_messages_dropped_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Events are being dropped ({{ $labels.reason }})"
+          description: "Check the DLQ topic racestream.dlq.v1."
