@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#0D0F12"/>
+  <!-- Signal trace: the wordmark motif, a telemetry line rather than a chequered flag. -->
+  <path d="M4 20 L9 20 L12 11 L16 25 L20 8 L23 20 L28 20"
+        fill="none" stroke="#E10600" stroke-width="2.4"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

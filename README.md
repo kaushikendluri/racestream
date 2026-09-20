@@ -99,6 +99,15 @@ Rationale for every major choice: [`docs/engineering-decisions.md`](docs/enginee
 | Observability | Prometheus + Grafana | Real metrics from real counters |
 | Infra | Docker Compose | `docker compose up` brings up the whole system |
 
+### The decision that shapes everything else
+
+A value that was not measured renders as `—`, never as `0`. It is enforced in the
+Pydantic models, in the latency calculation, and in the frontend formatters, and
+it is tested on both sides. A dashboard that prints `0 ms` for a latency it never
+measured makes every other number on the screen untrustworthy — so this one is
+non-negotiable, and it is why several panels in the screenshots are deliberately
+empty.
+
 ## Quick start
 
 **Requirements:** Docker with Compose v2. Nothing else — no API key, no account. OpenF1 is free
@@ -108,8 +117,14 @@ and unauthenticated.
 git clone https://github.com/kaushikendluri/racestream.git
 cd racestream
 cp .env.example .env
-make dev            # or: docker compose up --build
+
+make dev            # Linux / macOS / WSL
+./make.ps1 dev      # Windows  (make is not installed by default)
+# or, with neither:
+docker compose up --build
 ```
+
+Run `make help` (or `./make.ps1 help`) for the full command list.
 
 | Service | URL |
 |---|---|
@@ -117,14 +132,41 @@ make dev            # or: docker compose up --build
 | API + OpenAPI docs | http://localhost:8000/docs |
 | Redpanda Console | http://localhost:8080 |
 | Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 |
+| Grafana | http://localhost:3002 |
 
-Then load a session and replay it:
+> **Port conflicts.** Every host port is configurable in `.env`. The database and
+> Grafana default *off* 5432 and 3000 because those are so often already bound on
+> a working machine.
+
+Once Phase 2 lands, a session is loaded and replayed with:
 
 ```bash
 make ingest SESSION=9158     # pull a historical session into TimescaleDB
 make replay SESSION=9158     # stream it through Redpanda at 1x
 ```
+
+## What works today
+
+Phase 1 is complete and verified against a running stack:
+
+- `docker compose up` brings up seven services, dependency-gated on real healthchecks.
+- **TimescaleDB** with 6 hypertables, columnar compression on the two high-volume
+  tables, and idempotent write paths — verified by writing 500 events, replaying
+  the identical batch, and confirming the row count did not move.
+- **Redpanda** with 5 topics at their intended partition counts; events produced
+  and consumed round-trip, and a deliberately malformed message routed to the DLQ
+  with its rejection reason while the consumer stayed running.
+- **FastAPI** serving health with per-component measured latency. Pointed at an
+  unreachable broker it reports `down`, `latency_ms: null` and HTTP 503 — verified,
+  not assumed.
+- **Prometheus + Grafana** scraping real application counters, with recording
+  rules for p50/p95/p99 and a provisioned datasource.
+- **React shell** with the full route table, design system, and the five
+  loading/empty/stale/error/disconnected states.
+- 59 Python tests and 15 frontend tests passing.
+
+Screens whose pipeline does not exist yet say so, and say which phase delivers
+them. They do not render mock telemetry.
 
 ## Build status
 
@@ -133,7 +175,7 @@ feature runs and has been verified against a live stack.
 
 | # | Phase | Status |
 |---|---|---|
-| 1 | Repo, Compose, TimescaleDB, FastAPI health, React shell, Redpanda | in progress |
+| 1 | Repo, Compose, TimescaleDB, FastAPI health, React shell, Redpanda | **done** |
 | 2 | OpenF1 ingestion, schemas, validation | not started |
 | 3 | Redpanda producer/consumer, topics, consumer groups | not started |
 | 4 | Stream processor, derived metrics, persistence | not started |

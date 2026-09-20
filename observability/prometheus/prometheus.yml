@@ -20,29 +20,17 @@ scrape_configs:
     metrics_path: /public_metrics
     static_configs:
       - targets: ["redpanda:9644"]
-        labels:
-          component: streaming
 
+  # The API serves its metrics from the same port as the REST surface, so there
+  # is no second listener to keep alive.
+  # No `component` label is attached here on purpose. RaceStream metrics carry
+  # their own `component` label, and a target label of the same name would win,
+  # pushing the real value to `exported_component` and silently breaking every
+  # query that groups by component. `job` already identifies the service.
   - job_name: racestream-api
     static_configs:
-      - targets: ["api:9100"]
-        labels:
-          component: api
+      - targets: ["api:8000"]
 
-  - job_name: racestream-ingestion
-    static_configs:
-      - targets: ["ingestion:9101"]
-        labels:
-          component: ingestion
-
-  - job_name: racestream-processor
-    static_configs:
-      - targets: ["processor:9102"]
-        labels:
-          component: processor
-
-  - job_name: racestream-replay
-    static_configs:
-      - targets: ["replay:9103"]
-        labels:
-          component: replay
+  # Ingestion, processor and replay are added here as each service lands. A
+  # permanently-red target teaches people to ignore red targets, so a job is
+  # only listed once the thing it scrapes exists.

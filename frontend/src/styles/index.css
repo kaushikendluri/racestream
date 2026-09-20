@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Tabular figures everywhere by default. On a timing tower, digits that
+     * change width as values update make the whole column jitter. */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'cv01' 1, 'ss01' 1;
+  }
+
+  html {
+    @apply bg-surface-base;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-surface-base text-content-primary font-sans text-base antialiased;
+    /* The dashboard owns its own scroll regions; the page itself never scrolls
+     * horizontally. */
+    overflow-x: hidden;
+  }
+
+  /* Visible focus, always. Keyboard navigation is the primary input for anyone
+   * operating a console like this with their eyes on the data. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent/70 ring-offset-2 ring-offset-surface-base;
+  }
+
+  /* Thin scrollbars matched to the surface ramp. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full border-2 border-solid border-transparent bg-line-strong bg-clip-content;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-content-disabled bg-clip-content;
+  }
+
+  /* Respect a reduced-motion preference: every animation here is informative,
+   * so removing it must not remove the information - the colour change stays,
+   * only the movement goes. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* ---- Structural primitives -------------------------------------------- */
+
+  .panel {
+    @apply rounded-lg border border-line bg-surface-raised shadow-panel;
+  }
+
+  .panel-inset {
+    @apply rounded border border-line-subtle bg-surface-inset;
+  }
+
+  /* Uppercase micro-label above a value or section. Letter-spaced so that at
+   * 10px it still reads as words rather than a smear. */
+  .label {
+    @apply text-2xs font-medium uppercase tracking-label text-content-tertiary;
+  }
+
+  /* Any machine-generated number. The class exists so that "is this value from
+   * a machine?" is answerable by looking at the markup. */
+  .telemetry-value {
+    @apply font-mono tabular-nums text-content-primary;
+  }
+
+  .telemetry-unit {
+    @apply font-mono text-2xs font-normal text-content-tertiary;
+  }
+
+  /* ---- Status ------------------------------------------------------------ */
+
+  /* Status is never colour alone: each dot is paired with a text label in the
+   * markup, so the state survives both greyscale and colour-blindness. */
+  .status-dot {
+    @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
+  }
+
+  .divider-h {
+    @apply h-px w-full bg-line-subtle;
+  }
+
+  .divider-v {
+    @apply w-px self-stretch bg-line-subtle;
+  }
+
+  /* ---- Loading ----------------------------------------------------------- */
+
+  .skeleton {
+    @apply animate-skeleton rounded bg-surface-inset;
+  }
+}
+
+@layer utilities {
+  /* Fades the bottom of a scrolling list so clipped rows read as "more below"
+   * rather than as a hard cut. */
+  .mask-fade-b {
+    mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+  }
+
+  .grid-lines {
+    background-image:
+      linear-gradient(to right, rgba(37, 42, 51, 0.35) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(37, 42, 51, 0.35) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}

@@ -96,7 +96,7 @@ class PipelineTrace(BaseModel):
 
     def stamp(self, field: str, when: datetime | None = None) -> "PipelineTrace":
         """Return a copy with ``field`` set. Events are treated as immutable."""
-        if field not in self.model_fields:
+        if field not in type(self).model_fields:
             raise ValueError(f"unknown trace field: {field}")
         return self.model_copy(update={field: when or _utcnow()})
 
