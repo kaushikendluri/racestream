@@ -136,7 +136,7 @@ UNION ALL SELECT 'race_control_events', count(*) FROM race_control_events;
 
     'ingest' {
         if (-not $Args) { throw 'Usage: ./make.ps1 ingest <session_id>' }
-        Invoke-Compose run --rm ingestion python -m app.main --session $Args[0]
+        Invoke-Compose run --rm ingestion python -m racestream_ingestion.main --session $Args[0]
     }
 
     'replay' {

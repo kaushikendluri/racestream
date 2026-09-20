@@ -12,8 +12,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, Response, status
 
-from app.models import ComponentHealth, HealthResponse, HealthState, ReadinessResponse
-from app.state import AppState
+from racestream_api.models import ComponentHealth, HealthResponse, HealthState, ReadinessResponse
+from racestream_api.state import AppState
 from racestream_common.config import get_settings
 from racestream_common.obs import METRICS, get_logger
 

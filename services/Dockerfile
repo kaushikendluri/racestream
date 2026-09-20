@@ -46,22 +46,22 @@ WORKDIR /app/api
 EXPOSE 8000 9100
 HEALTHCHECK --interval=15s --timeout=5s --start-period=25s --retries=4 \
   CMD curl -fsS http://localhost:8000/api/system/live >/dev/null || exit 1
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "warning"]
+CMD ["uvicorn", "racestream_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "warning"]
 
 # --- ingestion -------------------------------------------------------------
 FROM base AS ingestion
 WORKDIR /app/ingestion
 EXPOSE 9101
-CMD ["python", "-m", "app.main"]
+CMD ["python", "-m", "racestream_ingestion.main"]
 
 # --- processor -------------------------------------------------------------
 FROM base AS processor
 WORKDIR /app/processor
 EXPOSE 9102
-CMD ["python", "-m", "app.main"]
+CMD ["python", "-m", "racestream_processor.main"]
 
 # --- replay ----------------------------------------------------------------
 FROM base AS replay
 WORKDIR /app/replay
 EXPOSE 9103
-CMD ["python", "-m", "app.main"]
+CMD ["python", "-m", "racestream_replay.main"]

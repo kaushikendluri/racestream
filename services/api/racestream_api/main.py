@@ -16,10 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app.config import get_api_settings, get_shared_settings
-from app.models import ErrorResponse
-from app.routers import health
-from app.state import AppState
+from racestream_api.config import get_api_settings, get_shared_settings
+from racestream_api.models import ErrorResponse
+from racestream_api.routers import health
+from racestream_api.state import AppState
 from racestream_common.db import Database
 from racestream_common.obs import configure_logging, get_logger
 

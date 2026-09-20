@@ -111,7 +111,7 @@ lag: ## Show consumer group lag
 	$(COMPOSE) exec redpanda rpk group describe racestream-processor 2>/dev/null || true
 
 ingest: ## Ingest a historical session (make ingest SESSION=9158)
-	$(COMPOSE) run --rm ingestion python -m app.main --session $(SESSION)
+	$(COMPOSE) run --rm ingestion python -m racestream_ingestion.main --session $(SESSION)
 
 replay: ## Replay a session through the pipeline (make replay SESSION=9158 SPEED=1)
 	curl -s -X POST http://localhost:8000/api/replay/start \
