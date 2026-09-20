@@ -1,0 +1,2 @@
+# The processor needs nothing beyond racestream_common: its inputs are Kafka
+# records and its outputs are database rows, both of which common provides.

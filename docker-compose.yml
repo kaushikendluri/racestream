@@ -200,6 +200,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  processor:
+    build:
+      context: ./services
+      dockerfile: Dockerfile
+      target: processor
+    container_name: racestream-processor
+    environment:
+      <<: *python-env
+    # Scale the telemetry group with `docker compose up -d --scale processor=N`.
+    # N is bounded by the telemetry topic partition count (6). The timing group
+    # is single-instance by design -- see services/processor/.../state.py.
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend

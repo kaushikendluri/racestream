@@ -1,0 +1,2 @@
+# Replay reads from TimescaleDB and publishes to Kafka; both come from
+# racestream_common.

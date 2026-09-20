@@ -31,6 +31,11 @@ scrape_configs:
     static_configs:
       - targets: ["api:8000"]
 
-  # Ingestion, processor and replay are added here as each service lands. A
-  # permanently-red target teaches people to ignore red targets, so a job is
-  # only listed once the thing it scrapes exists.
+  - job_name: racestream-processor
+    static_configs:
+      - targets: ["processor:9102"]
+
+  # Ingestion is a job, not a daemon, so it is not scraped continuously.
+  # Replay is added here when that service lands. A permanently-red target
+  # teaches people to ignore red targets, so a job is only listed once the
+  # thing it scrapes exists.
