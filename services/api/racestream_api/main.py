@@ -17,13 +17,19 @@ from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from racestream_api.config import get_api_settings, get_shared_settings
+from racestream_api.hub import LiveHub
 from racestream_api.models import ErrorResponse
-from racestream_api.routers import health
+from racestream_api.routers import health, live
 from racestream_api.state import AppState
 from racestream_common.db import Database
+from racestream_common.kafka import EventConsumer, EventProducer, ensure_topics
 from racestream_common.obs import configure_logging, get_logger
+from racestream_common.topics import POSITION, SESSION, TELEMETRY, TIMING
 
 API_VERSION = "0.1.0"
+
+# The API is a third consumer group alongside the processor's two.
+WEBSOCKET_GROUP = "racestream-websocket"
 
 settings = get_api_settings()
 shared = get_shared_settings()
@@ -51,6 +57,38 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # /health has to be reachable precisely so it can report the problem.
         log.error("api.database_unavailable_at_startup", error=str(exc))
 
+    # The live hub reads Kafka itself, in its own consumer group, rather than
+    # being fed by the processor. Two independent readers of the same log at
+    # their own offsets: the live view survives a processor restart, and a
+    # stalled browser cannot stall the database writes. See hub.py.
+    state.hub = LiveHub()
+    await state.hub.start()
+
+    try:
+        await ensure_topics(shared.kafka.bootstrap_servers)
+        state.dlq_producer = EventProducer(shared.kafka, "api-dlq")
+        await state.dlq_producer.start()
+        state.consumer = EventConsumer(
+            settings=shared.kafka,
+            topics=[TELEMETRY.name, POSITION.name, TIMING.name, SESSION.name],
+            group_id=WEBSOCKET_GROUP,
+            handler=state.hub.on_events,
+            dlq_producer=state.dlq_producer,
+            # `latest`, not `earliest`. The hub is a live view: its state is an
+            # in-memory projection of the current stream, and replaying hours
+            # of retained history to rebuild it would delay the live feed by
+            # minutes for no benefit. Historical state is a database query,
+            # served by the REST endpoints. The processor, whose job is to miss
+            # nothing, uses `earliest`.
+            auto_offset_reset="latest",
+        )
+        await state.consumer.start()
+    except Exception as exc:
+        # A broker that is not up yet must not stop the API from serving, for
+        # the same reason the database must not: /health has to be reachable
+        # in order to report the problem.
+        log.error("api.stream_consumer_unavailable", error=str(exc))
+
     log.info(
         "api.started",
         version=API_VERSION,
@@ -60,6 +98,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        if state.consumer is not None:
+            await state.consumer.stop()
+        if state.dlq_producer is not None:
+            await state.dlq_producer.stop()
+        if state.hub is not None:
+            await state.hub.stop()
         if state.database is not None:
             await state.database.close()
         log.info("api.stopped")
@@ -138,6 +182,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 app.include_router(health.router)
+app.include_router(live.router)
 
 
 if settings.expose_metrics_endpoint:

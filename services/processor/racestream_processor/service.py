@@ -1,7 +1,7 @@
 """Stream processor.
 
 Two consumer groups, split by what their work actually requires (see
-``state.py`` for the full argument):
+``racestream_common.domain.state`` for the full argument):
 
 ``racestream-telemetry``
     Reads ``telemetry.v1`` and ``position.v1`` - the high-volume per-car
@@ -31,7 +31,7 @@ from racestream_common.obs.metrics import utcnow
 from racestream_common.schemas import Event
 from racestream_common.topics import POSITION, SESSION, TELEMETRY, TIMING
 
-from racestream_processor.state import SessionState
+from racestream_common.domain import SessionState
 
 log = get_logger(__name__)
 

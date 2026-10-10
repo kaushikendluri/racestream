@@ -22,7 +22,7 @@ from racestream_common.schemas import (
     TimingUpdate,
     Weather,
 )
-from racestream_processor.state import DriverState, SectorTimes, SessionState
+from racestream_common.domain import DriverState, SectorTimes, SessionState
 
 T0 = datetime(2024, 3, 2, 15, 0, 0, tzinfo=timezone.utc)
 SESSION = 9472

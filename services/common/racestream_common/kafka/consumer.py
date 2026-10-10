@@ -79,6 +79,7 @@ class EventConsumer:
         handler: BatchHandler,
         dlq_producer: EventProducer | None = None,
         poll_timeout_ms: int = 1000,
+        auto_offset_reset: str | None = None,
     ) -> None:
         self._settings = settings
         self._topics = tuple(topics)
@@ -86,6 +87,12 @@ class EventConsumer:
         self._handler = handler
         self._dlq = dlq_producer
         self._poll_timeout_ms = poll_timeout_ms
+        # Where a brand-new group starts reading. This is a per-consumer
+        # decision, not a global one: a persistence consumer wants `earliest`
+        # so it misses nothing, while a live-view consumer wants `latest`
+        # because replaying hours of history to rebuild an in-memory view
+        # delays the live feed it exists to serve. See the API hub.
+        self._auto_offset_reset = auto_offset_reset or settings.auto_offset_reset
 
         self._consumer: AIOKafkaConsumer | None = None
         self._task: asyncio.Task | None = None
@@ -105,7 +112,7 @@ class EventConsumer:
             group_id=self._group_id,
             client_id=f"{self._settings.client_id}-{self._group_id}",
             enable_auto_commit=False,
-            auto_offset_reset=self._settings.auto_offset_reset,
+            auto_offset_reset=self._auto_offset_reset,
             max_poll_records=self._settings.max_poll_records,
             session_timeout_ms=self._settings.session_timeout_ms,
         )
@@ -114,7 +121,12 @@ class EventConsumer:
         self.stats.state = "running"
         self.stats.started_at = utcnow().isoformat()
         self._task = asyncio.create_task(self._run(), name=f"consumer-{self._group_id}")
-        log.info("consumer.started", group=self._group_id, topics=list(self._topics))
+        log.info(
+            "consumer.started",
+            group=self._group_id,
+            topics=list(self._topics),
+            auto_offset_reset=self._auto_offset_reset,
+        )
 
     async def stop(self) -> None:
         self._stop_event.set()

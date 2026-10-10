@@ -216,7 +216,7 @@ feature runs and has been verified against a live stack.
 | 2 | OpenF1 ingestion, schemas, validation | **done** |
 | 3 | Redpanda producer/consumer, topics, consumer groups | **done** |
 | 4 | Stream processor, derived metrics, persistence | **done** |
-| 5 | WebSocket service, real-time frontend updates | not started |
+| 5 | WebSocket service, real-time frontend updates | backend **done**, frontend next |
 | 6 | Dashboard, timing tower, track map, telemetry charts | not started |
 | 7 | Replay engine, speed control, seek, event markers | not started |
 | 8 | Prometheus, Grafana, latency + throughput instrumentation | not started |
