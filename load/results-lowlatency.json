@@ -1,0 +1,38 @@
+[
+  {
+    "run_label": "bench-150-1791663397",
+    "target_rate": 150,
+    "duration_s": 30.02,
+    "published": 4500,
+    "achieved_rate": 149.9,
+    "samples": 225,
+    "drain_s": 0.23,
+    "p50_ms": 45.4,
+    "p95_ms": 76.42,
+    "p99_ms": 89.7,
+    "max_ms": 96.0,
+    "kafka_p50_ms": 11.73,
+    "derive_p50_ms": 0.13,
+    "db_p50_ms": 33.36,
+    "peak_lag": 2,
+    "kept_up": true
+  },
+  {
+    "run_label": "bench-1000-1791663435",
+    "target_rate": 1000,
+    "duration_s": 30.02,
+    "published": 30000,
+    "achieved_rate": 999.2,
+    "samples": 1500,
+    "drain_s": 0.23,
+    "p50_ms": 99.66,
+    "p95_ms": 192.91,
+    "p99_ms": 228.41,
+    "max_ms": 270.84,
+    "kafka_p50_ms": 18.62,
+    "derive_p50_ms": 0.46,
+    "db_p50_ms": 78.91,
+    "peak_lag": 6,
+    "kept_up": true
+  }
+]

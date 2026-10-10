@@ -68,6 +68,18 @@ class EventProducer:
     def started(self) -> bool:
         return self._producer is not None
 
+    async def flush(self) -> None:
+        """Block until every buffered record has been acknowledged.
+
+        ``send`` returns as soon as a record is buffered, which is what the
+        ingestion loop wants. But a caller that is about to report how much it
+        published, or to mark a session complete, must not do so while records
+        are still in flight - otherwise the report claims a durability the
+        broker has not yet confirmed.
+        """
+        if self._producer is not None:
+            await self._producer.flush()
+
     async def send(self, event: Event, wait: bool = False) -> None:
         """Publish one event to the topic its type routes to.
 

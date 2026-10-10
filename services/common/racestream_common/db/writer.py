@@ -200,7 +200,9 @@ class TelemetryWriter:
         self._seen = 0
 
         self._buffers: dict[EventType, list[tuple]] = {}
-        self._latency_rows: list[tuple] = []
+        # Sampled events held until the flush that writes them completes, so
+        # db_ts can be stamped with the time the write actually committed.
+        self._latency_samples: list[Event] = []
         self._lock = asyncio.Lock()
         self._flush_task: asyncio.Task | None = None
         self._stopping = False
@@ -238,24 +240,34 @@ class TelemetryWriter:
             await self.flush()
 
     def _record_latency(self, event: Event) -> None:
+        """Hold a sampled event until its write commits.
+
+        The final stage cannot be measured here: at this point the row is only
+        buffered, and ``db_ts`` has not happened yet. Stamping it now would
+        report a database write time of zero for a write that has not occurred,
+        which is exactly the kind of invented number this project refuses to
+        print. The event is therefore held and stamped in :meth:`flush`.
+        """
         self._seen += 1
         if self._seen % self._latency_sample_rate:
             return
+        self._latency_samples.append(event)
+
+    @staticmethod
+    def _latency_row(event: Event, run_label: str | None) -> tuple:
         t = event.trace
-        self._latency_rows.append(
-            (
-                utcnow(),
-                event.session_id,
-                event.event_type.value,
-                _source_of(event),
-                self._run_label,
-                t.elapsed_seconds("source_ts", "ingest_ts"),
-                t.elapsed_seconds("ingest_ts", "produce_ts"),
-                t.elapsed_seconds("produce_ts", "consume_ts"),
-                t.elapsed_seconds("consume_ts", "process_ts"),
-                t.elapsed_seconds("process_ts", "db_ts"),
-                t.elapsed_seconds("ingest_ts", "db_ts"),
-            )
+        return (
+            utcnow(),
+            event.session_id,
+            event.event_type.value,
+            _source_of(event),
+            run_label,
+            t.elapsed_seconds("source_ts", "ingest_ts"),
+            t.elapsed_seconds("ingest_ts", "produce_ts"),
+            t.elapsed_seconds("produce_ts", "consume_ts"),
+            t.elapsed_seconds("consume_ts", "process_ts"),
+            t.elapsed_seconds("process_ts", "db_ts"),
+            t.elapsed_seconds("ingest_ts", "db_ts"),
         )
 
     async def flush(self) -> int:
@@ -269,15 +281,16 @@ class TelemetryWriter:
         """
         async with self._lock:
             buffers, self._buffers = self._buffers, {}
-            latency_rows, self._latency_rows = self._latency_rows, []
+            samples, self._latency_samples = self._latency_samples, []
             self.stats.pending = 0
             METRICS.queue_depth.labels(queue="db_writer").set(0)
 
-        if not buffers and not latency_rows:
+        if not buffers and not samples:
             return 0
 
         written = 0
         loop = asyncio.get_running_loop()
+        failed_types: set[EventType] = set()
 
         for event_type, rows in buffers.items():
             if not rows:
@@ -294,6 +307,7 @@ class TelemetryWriter:
                 )
                 written += len(rows)
             except Exception as exc:
+                failed_types.add(event_type)
                 self.stats.flush_errors += 1
                 self.stats.last_error = f"{type(exc).__name__}: {exc}"
                 METRICS.errors.labels(component="db_writer", kind=type(exc).__name__).inc()
@@ -302,12 +316,33 @@ class TelemetryWriter:
                 )
                 log.error("db.flush_failed", table=table, rows=len(rows), error=str(exc))
 
-        if latency_rows:
-            try:
-                await self._db.executemany(_INSERT_PIPELINE_EVENT, latency_rows)
-            except Exception as exc:
-                # Diagnostics must never take down the write path.
-                log.warning("db.latency_flush_failed", error=str(exc))
+        # Now that the write has committed, db_ts is a real event that happened
+        # and can be stamped. Only samples whose own table actually succeeded
+        # are recorded: reporting a write latency for a batch that failed would
+        # be worse than reporting nothing.
+        if samples:
+            committed_at = utcnow()
+            rows = [
+                self._latency_row(
+                    event.model_copy(update={"trace": event.trace.stamp("db_ts", committed_at)}),
+                    self._run_label,
+                )
+                for event in samples
+                if event.event_type in buffers and event.event_type not in failed_types
+            ]
+            if rows:
+                try:
+                    await self._db.executemany(_INSERT_PIPELINE_EVENT, rows)
+                    for event in samples:
+                        if event.event_type in failed_types:
+                            continue
+                        stamped = event.trace.stamp("db_ts", committed_at)
+                        gap = stamped.elapsed_seconds("ingest_ts", "db_ts")
+                        if gap is not None and gap >= 0:
+                            METRICS.stage_latency.labels(stage="ingest_to_db").observe(gap)
+                except Exception as exc:
+                    # Diagnostics must never take down the write path.
+                    log.warning("db.latency_flush_failed", error=str(exc))
 
         if written:
             self.stats.rows_written += written

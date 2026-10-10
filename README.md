@@ -145,9 +145,38 @@ make ingest SESSION=9158     # pull a historical session into TimescaleDB
 make replay SESSION=9158     # stream it through Redpanda at 1x
 ```
 
+## Measured, not claimed
+
+Full method, hardware and caveats in [`docs/benchmarks.md`](docs/benchmarks.md).
+A live F1 session produces **~152 events/s** (measured against OpenF1, not assumed).
+
+| | |
+|---|---|
+| p50 end-to-end latency at live rate | **45.4 ms** |
+| p95 / p99 at live rate | 76.4 ms / 89.7 ms |
+| Sustained throughput, 1 processor | **1,500 events/s** (~10x live rate) |
+| Sustained throughput, 3 processors | 2,000 events/s |
+| Records dropped mapping 7 OpenF1 endpoints | **0** of ~76,000 |
+| Duplicate rows after reprocessing 214,920 events | **0** |
+
+End-to-end is `ingest_ts -> db_ts`, taken from per-stage trace stamps on each
+event. Run on a laptop under a 4 GB Docker cap with the broker pinned to one
+core — the absolute figures would be higher on a server; what they establish is
+where the system saturates and why.
+
+**The most useful thing the instrumentation found:** p50 latency at live rate
+started at 303 ms, and the stage breakdown blamed the database write for 292 ms
+of it — against a database whose health check reports a 2 ms round-trip. The
+stage does not measure the write; it measures *buffer wait plus write*. At 150
+events/s a 500-row batch takes 3.3 s to fill, so every flush was firing on the
+0.5 s timeout. Dropping that timeout to 0.05 s moved p50 to 45 ms with no change
+to the saturation point. The dominant term in end-to-end latency had been a
+tuning constant all along. A latency breakdown tells you where time was spent,
+not what caused it.
+
 ## What works today
 
-Phase 1 is complete and verified against a running stack:
+Phases 1-4 and 10 are complete and verified against a running stack:
 
 - `docker compose up` brings up seven services, dependency-gated on real healthchecks.
 - **TimescaleDB** with 6 hypertables, columnar compression on the two high-volume
@@ -163,7 +192,15 @@ Phase 1 is complete and verified against a running stack:
   rules for p50/p95/p99 and a provisioned datasource.
 - **React shell** with the full route table, design system, and the five
   loading/empty/stale/error/disconnected states.
-- 59 Python tests and 15 frontend tests passing.
+- **Ingestion** of any historical session from OpenF1, shaped around a measured
+  constraint: the API enforces a hard 3 requests/second limit, so the client
+  holds a token bucket rather than just a concurrency cap.
+- **Stream processor** with two consumer groups split by what their work
+  actually requires — per-car derivation scales horizontally, session-wide
+  aggregation runs single-instance because it must see every car to be correct.
+- **Load harness** (`load/run_benchmark.py`) that publishes real telemetry at a
+  controlled rate and reports measured percentiles.
+- 142 Python tests and 15 frontend tests passing.
 
 Screens whose pipeline does not exist yet say so, and say which phase delivers
 them. They do not render mock telemetry.
@@ -176,15 +213,15 @@ feature runs and has been verified against a live stack.
 | # | Phase | Status |
 |---|---|---|
 | 1 | Repo, Compose, TimescaleDB, FastAPI health, React shell, Redpanda | **done** |
-| 2 | OpenF1 ingestion, schemas, validation | not started |
-| 3 | Redpanda producer/consumer, topics, consumer groups | not started |
-| 4 | Stream processor, derived metrics, persistence | not started |
+| 2 | OpenF1 ingestion, schemas, validation | **done** |
+| 3 | Redpanda producer/consumer, topics, consumer groups | **done** |
+| 4 | Stream processor, derived metrics, persistence | **done** |
 | 5 | WebSocket service, real-time frontend updates | not started |
 | 6 | Dashboard, timing tower, track map, telemetry charts | not started |
 | 7 | Replay engine, speed control, seek, event markers | not started |
 | 8 | Prometheus, Grafana, latency + throughput instrumentation | not started |
 | 9 | Failure simulation and recovery verification | not started |
-| 10 | Load testing and benchmarking | not started |
+| 10 | Load testing and benchmarking | **done** |
 | 11 | Unit, integration, end-to-end and chaos tests | not started |
 | 12 | Documentation and demo | not started |
 

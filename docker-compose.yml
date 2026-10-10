@@ -22,7 +22,10 @@ x-python-env: &python-env
   DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-2}
   DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
   DB_WRITE_BATCH_SIZE: ${DB_WRITE_BATCH_SIZE:-500}
-  DB_WRITE_BATCH_TIMEOUT_S: ${DB_WRITE_BATCH_TIMEOUT_S:-0.5}
+  # Measured: at the live F1 rate a 500-row batch takes 3.3s to fill, so this
+  # timeout -- not the database -- sets end-to-end latency. 0.5 -> 0.05 moved
+  # p50 from 303ms to 45ms. See docs/benchmarks.md.
+  DB_WRITE_BATCH_TIMEOUT_S: ${DB_WRITE_BATCH_TIMEOUT_S:-0.05}
   OBS_LOG_LEVEL: ${OBS_LOG_LEVEL:-INFO}
   OBS_LOG_JSON: ${OBS_LOG_JSON:-true}
   OBS_ENVIRONMENT: ${OBS_ENVIRONMENT:-local}
@@ -205,7 +208,8 @@ services:
       context: ./services
       dockerfile: Dockerfile
       target: processor
-    container_name: racestream-processor
+    # No container_name: a fixed name makes `--scale` impossible, and scaling
+    # this service horizontally is one of the things the architecture claims.
     environment:
       <<: *python-env
     # Scale the telemetry group with `docker compose up -d --scale processor=N`.
