@@ -267,6 +267,13 @@ class SessionState:
     last_event_at: datetime | None = None
     events_applied: int = 0
 
+    # Where the events that built this state came from. The frontend reads this
+    # to decide between LIVE and REPLAY, so it must reflect the wire and not an
+    # assumption: replayed telemetry is real data, but it is not live, and a UI
+    # that says LIVE over it is lying about the one thing it most needs to be
+    # right about.
+    last_source: str | None = None
+
     def driver(self, number: int) -> DriverState:
         state = self.drivers.get(number)
         if state is None:
@@ -279,6 +286,9 @@ class SessionState:
         self.events_applied += 1
         if self.last_event_at is None or event.timestamp > self.last_event_at:
             self.last_event_at = event.timestamp
+        self.last_source = (
+            event.source.value if hasattr(event.source, "value") else str(event.source)
+        )
 
         et = event.event_type
 
@@ -368,5 +378,6 @@ class SessionState:
             },
             "last_event_at": self.last_event_at.isoformat() if self.last_event_at else None,
             "events_applied": self.events_applied,
+            "last_source": self.last_source,
             "drivers": [d.as_dict() for d in self.leaderboard()],
         }

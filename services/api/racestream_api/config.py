@@ -29,6 +29,10 @@ class ApiSettings(BaseSettings):
     # Prometheus scraping is internal; exposing it publicly leaks topology.
     expose_metrics_endpoint: bool = Field(default=True)
 
+    # Replay runs as its own service; this API proxies to it so the frontend
+    # talks to one origin and there is exactly one replay state machine.
+    replay_service_url: str = Field(default="http://replay:8001")
+
     # A client is considered stale, then disconnected, after these gaps with no
     # event. The frontend mirrors these thresholds so both agree on "LIVE".
     stale_after_s: float = Field(default=5.0, gt=0)

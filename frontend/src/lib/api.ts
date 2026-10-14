@@ -7,7 +7,14 @@
  */
 
 import { config } from './config';
-import type { ApiError, HealthResponse, ReadinessResponse } from './types';
+import type {
+  ApiError,
+  DriverInfo,
+  HealthResponse,
+  LiveSessionState,
+  ReadinessResponse,
+  SessionSummary,
+} from './types';
 
 export class RaceStreamApiError extends Error {
   constructor(
@@ -96,4 +103,26 @@ export const api = {
 
   readiness: (options?: RequestOptions) =>
     request<ReadinessResponse>('/api/system/ready', options),
+
+  sessions: (params: { year?: number; sessionType?: string } = {}, options?: RequestOptions) => {
+    const query = new URLSearchParams();
+    if (params.year != null) query.set('year', String(params.year));
+    if (params.sessionType) query.set('session_type', params.sessionType);
+    const suffix = query.toString();
+    return request<SessionSummary[]>(`/api/sessions${suffix ? `?${suffix}` : ''}`, options);
+  },
+
+  session: (sessionId: number, options?: RequestOptions) =>
+    request<SessionSummary>(`/api/sessions/${sessionId}`, options),
+
+  /** Reference data: fetched once, not pushed on every snapshot. */
+  sessionDrivers: (sessionId: number, options?: RequestOptions) =>
+    request<DriverInfo[]>(`/api/sessions/${sessionId}/drivers`, options),
+
+  /** The same payload the WebSocket pushes, for an immediate first paint. */
+  liveSnapshot: (sessionId: number, options?: RequestOptions) =>
+    request<{ sent_at: string; state: LiveSessionState }>(
+      `/api/live/${sessionId}`,
+      options,
+    ),
 };

@@ -35,7 +35,9 @@ scrape_configs:
     static_configs:
       - targets: ["processor:9102"]
 
+  # Replay serves its metrics from its control port, like the API.
+  - job_name: racestream-replay
+    static_configs:
+      - targets: ["replay:8001"]
+
   # Ingestion is a job, not a daemon, so it is not scraped continuously.
-  # Replay is added here when that service lands. A permanently-red target
-  # teaches people to ignore red targets, so a job is only listed once the
-  # thing it scrapes exists.

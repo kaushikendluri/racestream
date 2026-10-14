@@ -63,5 +63,5 @@ CMD ["python", "-m", "racestream_processor.main"]
 # --- replay ----------------------------------------------------------------
 FROM base AS replay
 WORKDIR /app/replay
-EXPOSE 9103
+EXPOSE 8001 9103
 CMD ["python", "-m", "racestream_replay.main"]

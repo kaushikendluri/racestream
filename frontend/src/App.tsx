@@ -10,9 +10,9 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/AppShell';
 import { SystemHealthPage } from '@/pages/SystemHealth';
 import { NotFoundPage } from '@/pages/NotFound';
+import { DashboardPage } from '@/pages/Dashboard';
 import {
   AnalyticsPage,
-  DashboardPage,
   DriverPage,
   ReplayPage,
   SessionsPage,

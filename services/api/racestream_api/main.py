@@ -19,7 +19,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from racestream_api.config import get_api_settings, get_shared_settings
 from racestream_api.hub import LiveHub
 from racestream_api.models import ErrorResponse
-from racestream_api.routers import health, live
+from racestream_api.routers import health, live, replay, sessions
 from racestream_api.state import AppState
 from racestream_common.db import Database
 from racestream_common.kafka import EventConsumer, EventProducer, ensure_topics
@@ -183,6 +183,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 app.include_router(health.router)
 app.include_router(live.router)
+app.include_router(sessions.router)
+app.include_router(replay.router)
 
 
 if settings.expose_metrics_endpoint:

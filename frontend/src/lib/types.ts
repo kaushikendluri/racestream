@@ -93,3 +93,134 @@ export type LoadState<T> =
   | { status: 'success'; data: T; fetchedAt: number }
   | { status: 'empty'; reason: string }
   | { status: 'error'; error: string };
+
+/* ---------------------------------------------------------------- live state
+ * Mirrors racestream_common.domain.SessionState.as_dict(). Every numeric field
+ * is nullable because the backend reports "not yet known" as null rather than
+ * substituting a zero, and the UI must preserve that distinction.
+ */
+
+export interface DriverSectors {
+  current: [number | null, number | null, number | null];
+  last: [number | null, number | null, number | null];
+  best: [number | null, number | null, number | null];
+}
+
+export interface DriverTelemetry {
+  speed: number | null;
+  throttle: number | null;
+  brake: number | null;
+  n_gear: number | null;
+  rpm: number | null;
+  drs: number | null;
+}
+
+export interface LiveDriver {
+  driver_number: number;
+  position: number | null;
+  gap_to_leader: number | null;
+  interval: number | null;
+  laps_down: number | null;
+  current_lap: number | null;
+  last_lap_time: number | null;
+  best_lap_time: number | null;
+  best_lap_number: number | null;
+  sectors: DriverSectors;
+  telemetry: DriverTelemetry;
+  track_position: { x: number | null; y: number | null };
+  last_lap_was_personal_best: boolean | null;
+  last_update: string | null;
+  telemetry_samples: number;
+}
+
+export interface LiveSessionState {
+  session_id: number;
+  session_name: string | null;
+  session_type: string | null;
+  circuit: string | null;
+  current_lap: number | null;
+  total_laps: number | null;
+  session_best_lap: number | null;
+  session_best_lap_driver: number | null;
+  session_best_sectors: [number | null, number | null, number | null];
+  session_best_sector_drivers: { s1: number | null; s2: number | null; s3: number | null };
+  weather: {
+    air_temperature: number | null;
+    track_temperature: number | null;
+    rainfall: number | null;
+  };
+  last_event_at: string | null;
+  events_applied: number;
+  /** 'live' | 'replay' | 'backfill' -- drives the LIVE/REPLAY badge honestly. */
+  last_source: string | null;
+  drivers: LiveDriver[];
+}
+
+/* ------------------------------------------------------------- wire messages */
+
+export interface HelloMessage {
+  type: 'hello';
+  connection_id: number;
+  server_time: string;
+  active_sessions: number[];
+  channels: string[];
+  stale_after_s: number;
+  disconnected_after_s: number;
+}
+
+export interface SnapshotMessage {
+  type: 'snapshot';
+  sent_at: string;
+  state: LiveSessionState;
+}
+
+export interface EventMessage {
+  type: 'event';
+  sent_at: string;
+  event: {
+    event_id: string;
+    event_type: string;
+    source: string;
+    session_id: number;
+    driver_id: number | null;
+    timestamp: string;
+    payload: Record<string, unknown>;
+  };
+}
+
+export interface SubscribedMessage {
+  type: 'subscribed';
+  session_id: number | null;
+  channels: string[];
+  drivers: number[];
+}
+
+export interface ErrorMessage {
+  type: 'error';
+  error: string;
+  detail: string;
+}
+
+export interface PongMessage {
+  type: 'pong';
+  server_time: string;
+}
+
+export type ServerMessage =
+  | HelloMessage
+  | SnapshotMessage
+  | EventMessage
+  | SubscribedMessage
+  | ErrorMessage
+  | PongMessage;
+
+/** A race-control message, kept for the event feed and replay markers. */
+export interface RaceControlEntry {
+  id: string;
+  timestamp: string;
+  message: string;
+  category: string | null;
+  flag: string | null;
+  lapNumber: number | null;
+  driverNumber: number | null;
+}

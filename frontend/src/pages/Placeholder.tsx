@@ -63,21 +63,6 @@ export function PhasePlaceholder({ title, phase, summary, planned }: Placeholder
   );
 }
 
-export const DashboardPage = () => (
-  <PhasePlaceholder
-    title="Live Dashboard"
-    phase="PHASE 6"
-    summary="Session state, live timing, circuit map and selected-driver telemetry."
-    planned={[
-      'Metric row: current lap, session time, leader, fastest lap, track and air temperature',
-      'Live timing tower driven by WebSocket updates, with per-cell diffing rather than full re-render',
-      'Interactive circuit map with interpolated car positions',
-      'Speed, throttle, brake, RPM and gear traces on a synchronised time axis',
-      'Sector analysis with driver-to-driver comparison',
-    ]}
-  />
-);
-
 export const SessionsPage = () => (
   <PhasePlaceholder
     title="Session Explorer"
